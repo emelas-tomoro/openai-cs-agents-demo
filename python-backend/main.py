@@ -245,17 +245,17 @@ async def jailbreak_guardrail(
 """
 DEMO: This section shows both patterns for agent communication:
 
-AGENTS WITH STRUCTURED INPUT/OUTPUT TYPES:
-- seat_booking_agent: Uses SeatBookingInput/SeatBookingOutput for complex seat management workflows
-- cancellation_agent: Uses CancellationInput/CancellationOutput for structured cancellation responses
+AGENTS WITH STRUCTURED INPUT TYPES (for validation only):
+- seat_booking_agent: Uses SeatBookingInput for data validation, returns simple text
+- cancellation_agent: Uses CancellationInput for data validation, returns simple text
 
 AGENTS WITHOUT STRUCTURED TYPES (Traditional approach):
 - flight_status_agent: Simple string-based communication for flight information
 - faq_agent: Basic question/answer format without structured schemas
 - triage_agent: Dynamic routing decisions using flexible text responses
 
-Both approaches work well - structured types provide better validation and contracts,
-while traditional agents offer more flexibility for simple interactions.
+BEST PRACTICE: Use input_type for validation when agents need specific data,
+but keep output as simple text for clean UI messages.
 """
 
 def seat_booking_instructions(
@@ -271,7 +271,7 @@ def seat_booking_instructions(
         "If this is not available, ask the customer for their confirmation number. If you have it, confirm that is the confirmation number they are referencing.\n"
         "2. Ask the customer what their desired seat number is. You can also use the display_seat_map tool to show them an interactive seat map where they can click to select their preferred seat.\n"
         "3. Use the update seat tool to update the seat on the flight.\n"
-        "4. IMPORTANT: This agent uses structured output - ensure your response includes: success status, new seat number, confirmation number, and a clear message.\n"
+        "4. Return clear, helpful messages to the customer in plain text.\n"
         "If the customer asks a question that is not related to the routine, transfer back to the triage agent."
     )
 
@@ -282,7 +282,7 @@ seat_booking_agent = Agent[AirlineAgentContext](
     instructions=seat_booking_instructions,
     tools=[update_seat, display_seat_map],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
-    output_type=SeatBookingOutput,
+    # NOTE: Uses input_type for validation, returns simple text messages
 )
 
 def flight_status_instructions(
@@ -352,7 +352,7 @@ def cancellation_instructions(
         f"1. The customer's confirmation number is {confirmation} and flight number is {flight}.\n"
         "   If either is not available, ask the customer for the missing information. If you have both, confirm with the customer that these are correct.\n"
         "2. If the customer confirms, use the cancel_flight tool to cancel their flight.\n"
-        "3. IMPORTANT: This agent uses structured output - provide clear confirmation including: success status, flight number, confirmation number, and a descriptive message.\n"
+        "3. Return clear, helpful messages to the customer in plain text.\n"
         "If the customer asks anything else, transfer back to the triage agent."
     )
 
@@ -363,7 +363,7 @@ cancellation_agent = Agent[AirlineAgentContext](
     instructions=cancellation_instructions,
     tools=[cancel_flight],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
-    output_type=CancellationOutput,
+    # NOTE: Uses input_type for validation, returns simple text messages
 )
 
 faq_agent = Agent[AirlineAgentContext](
