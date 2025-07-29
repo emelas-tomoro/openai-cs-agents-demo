@@ -41,6 +41,19 @@ This demo shows both approaches:
 - Some agents use structured types (seat booking, cancellation) for complex workflows
 - Some agents don't use them (FAQ, flight status) for simpler interactions
 
+DECISION CRITERIA FOR INPUT_TYPE:
+✅ USE input_type when:
+  - Agent needs specific structured data (confirmation_number, flight_number, etc.)
+  - Data validation is important for the workflow
+  - You want clear contracts between agents
+  - Complex workflows benefit from type safety
+
+❌ SKIP input_type when:
+  - Agent only needs simple text input (questions, requests)
+  - Flexibility is more important than validation
+  - Workflow is simple and doesn't require structured data
+  - You want to minimize complexity for straightforward interactions
+
 Input types define what data an agent expects to receive when it's handed off to.
 Output types define what structured data an agent should return when completing its task.
 """
@@ -295,6 +308,8 @@ flight_status_agent = Agent[AirlineAgentContext](
     tools=[flight_status_tool],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
     # NOTE: No structured input/output types - uses flexible string-based communication
+    # SIMPLE WORKFLOW: Just needs flight number (from context) and simple text requests
+    # No complex data validation needed, so input_type would add unnecessary complexity
 )
 
 # Cancellation tool and agent
@@ -364,6 +379,8 @@ faq_agent = Agent[AirlineAgentContext](
     tools=[faq_lookup_tool],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
     # NOTE: No structured input/output types - uses simple question/answer format
+    # SIMPLE WORKFLOW: Just needs the question text, no complex data validation required
+    # Input_type would be overkill for simple string-based communication
 )
 
 triage_agent = Agent[AirlineAgentContext](
@@ -376,8 +393,12 @@ triage_agent = Agent[AirlineAgentContext](
     ),
     handoffs=[
         flight_status_agent,
+        # COMPLEX WORKFLOW: Uses input_type for structured data validation
+        # This agent needs specific data (confirmation_number, flight_number) so input_type provides value
         handoff(agent=cancellation_agent, on_handoff=on_cancellation_handoff, input_type=CancellationInput),
         faq_agent,
+        # COMPLEX WORKFLOW: Uses input_type for structured data validation  
+        # This agent needs specific data (confirmation_number, current_seat) so input_type provides value
         handoff(agent=seat_booking_agent, on_handoff=on_seat_booking_handoff, input_type=SeatBookingInput),
     ],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
