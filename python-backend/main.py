@@ -28,6 +28,49 @@ class AirlineAgentContext(BaseModel):
     flight_number: str | None = None
     account_number: str | None = None  # Account number associated with the customer
 
+# =========================
+# HANDOFF INPUT/OUTPUT TYPES (OPTIONAL ENHANCEMENT)
+# =========================
+
+"""
+These Pydantic models define structured input and output types for agent handoffs.
+They ensure consistent data flow between agents and make the system more maintainable.
+
+NOTE: These are optional - agents can work with or without structured types.
+This demo shows both approaches:
+- Some agents use structured types (seat booking, cancellation) for complex workflows
+- Some agents don't use them (FAQ, flight status) for simpler interactions
+
+Input types define what data an agent expects to receive when it's handed off to.
+Output types define what structured data an agent should return when completing its task.
+"""
+
+class SeatBookingInput(BaseModel):
+    """Input data for seat booking agent handoff."""
+    confirmation_number: str | None = None
+    current_seat: str | None = None
+    customer_request: str
+
+class SeatBookingOutput(BaseModel):
+    """Output data from seat booking agent."""
+    success: bool
+    new_seat: str | None = None
+    confirmation_number: str | None = None
+    message: str
+
+class CancellationInput(BaseModel):
+    """Input data for cancellation agent handoff."""
+    confirmation_number: str | None = None
+    flight_number: str | None = None
+    customer_request: str
+
+class CancellationOutput(BaseModel):
+    """Output data from cancellation agent."""
+    success: bool
+    flight_number: str | None = None
+    confirmation_number: str | None = None
+    message: str
+
 def create_initial_context() -> AirlineAgentContext:
     """
     Factory for a new AirlineAgentContext.
@@ -181,6 +224,22 @@ async def jailbreak_guardrail(
 # AGENTS
 # =========================
 
+"""
+DEMO: This section shows both patterns for agent communication:
+
+AGENTS WITH STRUCTURED INPUT/OUTPUT TYPES:
+- seat_booking_agent: Uses SeatBookingInput/SeatBookingOutput for complex seat management workflows
+- cancellation_agent: Uses CancellationInput/CancellationOutput for structured cancellation responses
+
+AGENTS WITHOUT STRUCTURED TYPES (Traditional approach):
+- flight_status_agent: Simple string-based communication for flight information
+- faq_agent: Basic question/answer format without structured schemas
+- triage_agent: Dynamic routing decisions using flexible text responses
+
+Both approaches work well - structured types provide better validation and contracts,
+while traditional agents offer more flexibility for simple interactions.
+"""
+
 def seat_booking_instructions(
     run_context: RunContextWrapper[AirlineAgentContext], agent: Agent[AirlineAgentContext]
 ) -> str:
@@ -190,10 +249,11 @@ def seat_booking_instructions(
         f"{RECOMMENDED_PROMPT_PREFIX}\n"
         "You are a seat booking agent. If you are speaking to a customer, you probably were transferred to from the triage agent.\n"
         "Use the following routine to support the customer.\n"
-        f"1. The customer's confirmation number is {confirmation}."+
+        f"1. The customer's confirmation number is {confirmation}. "
         "If this is not available, ask the customer for their confirmation number. If you have it, confirm that is the confirmation number they are referencing.\n"
         "2. Ask the customer what their desired seat number is. You can also use the display_seat_map tool to show them an interactive seat map where they can click to select their preferred seat.\n"
         "3. Use the update seat tool to update the seat on the flight.\n"
+        "4. IMPORTANT: This agent uses structured output - ensure your response includes: success status, new seat number, confirmation number, and a clear message.\n"
         "If the customer asks a question that is not related to the routine, transfer back to the triage agent."
     )
 
@@ -204,6 +264,8 @@ seat_booking_agent = Agent[AirlineAgentContext](
     instructions=seat_booking_instructions,
     tools=[update_seat, display_seat_map],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
+    input_type=SeatBookingInput,
+    output_type=SeatBookingOutput,
 )
 
 def flight_status_instructions(
@@ -228,6 +290,7 @@ flight_status_agent = Agent[AirlineAgentContext](
     instructions=flight_status_instructions,
     tools=[flight_status_tool],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
+    # NOTE: No structured input/output types - uses flexible string-based communication
 )
 
 # Cancellation tool and agent
@@ -266,6 +329,7 @@ def cancellation_instructions(
         f"1. The customer's confirmation number is {confirmation} and flight number is {flight}.\n"
         "   If either is not available, ask the customer for the missing information. If you have both, confirm with the customer that these are correct.\n"
         "2. If the customer confirms, use the cancel_flight tool to cancel their flight.\n"
+        "3. IMPORTANT: This agent uses structured output - provide clear confirmation including: success status, flight number, confirmation number, and a descriptive message.\n"
         "If the customer asks anything else, transfer back to the triage agent."
     )
 
@@ -276,6 +340,8 @@ cancellation_agent = Agent[AirlineAgentContext](
     instructions=cancellation_instructions,
     tools=[cancel_flight],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
+    input_type=CancellationInput,
+    output_type=CancellationOutput,
 )
 
 faq_agent = Agent[AirlineAgentContext](
@@ -287,9 +353,10 @@ faq_agent = Agent[AirlineAgentContext](
     Use the following routine to support the customer.
     1. Identify the last question asked by the customer.
     2. Use the faq lookup tool to get the answer. Do not rely on your own knowledge.
-    3. Respond to the customer with the answer""",
+    3. Respond to the customer with the answer.""",
     tools=[faq_lookup_tool],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
+    # NOTE: No structured input/output types - uses simple question/answer format
 )
 
 triage_agent = Agent[AirlineAgentContext](
@@ -307,6 +374,7 @@ triage_agent = Agent[AirlineAgentContext](
         handoff(agent=seat_booking_agent, on_handoff=on_seat_booking_handoff),
     ],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
+    # NOTE: No structured input/output types - handles dynamic routing decisions
 )
 
 # Set up handoff relationships
