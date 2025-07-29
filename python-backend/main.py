@@ -153,10 +153,15 @@ async def display_seat_map(
 # HOOKS
 # =========================
 
-async def on_seat_booking_handoff(context: RunContextWrapper[AirlineAgentContext]) -> None:
+async def on_seat_booking_handoff(context: RunContextWrapper[AirlineAgentContext], input: SeatBookingInput) -> None:
     """Set a random flight number when handed off to the seat booking agent."""
     context.context.flight_number = f"FLT-{random.randint(100, 999)}"
     context.context.confirmation_number = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    # Use input data if available
+    if input.confirmation_number:
+        context.context.confirmation_number = input.confirmation_number
+    if input.current_seat:
+        context.context.seat_number = input.current_seat
 
 # =========================
 # GUARDRAILS
@@ -264,7 +269,6 @@ seat_booking_agent = Agent[AirlineAgentContext](
     instructions=seat_booking_instructions,
     tools=[update_seat, display_seat_map],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
-    input_type=SeatBookingInput,
     output_type=SeatBookingOutput,
 )
 
@@ -307,14 +311,18 @@ async def cancel_flight(
     return f"Flight {fn} successfully cancelled"
 
 async def on_cancellation_handoff(
-    context: RunContextWrapper[AirlineAgentContext]
+    context: RunContextWrapper[AirlineAgentContext], input: CancellationInput
 ) -> None:
     """Ensure context has a confirmation and flight number when handing off to cancellation."""
-    if context.context.confirmation_number is None:
+    if input.confirmation_number:
+        context.context.confirmation_number = input.confirmation_number
+    elif context.context.confirmation_number is None:
         context.context.confirmation_number = "".join(
             random.choices(string.ascii_uppercase + string.digits, k=6)
         )
-    if context.context.flight_number is None:
+    if input.flight_number:
+        context.context.flight_number = input.flight_number
+    elif context.context.flight_number is None:
         context.context.flight_number = f"FLT-{random.randint(100, 999)}"
 
 def cancellation_instructions(
@@ -340,7 +348,6 @@ cancellation_agent = Agent[AirlineAgentContext](
     instructions=cancellation_instructions,
     tools=[cancel_flight],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
-    input_type=CancellationInput,
     output_type=CancellationOutput,
 )
 
@@ -369,9 +376,9 @@ triage_agent = Agent[AirlineAgentContext](
     ),
     handoffs=[
         flight_status_agent,
-        handoff(agent=cancellation_agent, on_handoff=on_cancellation_handoff),
+        handoff(agent=cancellation_agent, on_handoff=on_cancellation_handoff, input_type=CancellationInput),
         faq_agent,
-        handoff(agent=seat_booking_agent, on_handoff=on_seat_booking_handoff),
+        handoff(agent=seat_booking_agent, on_handoff=on_seat_booking_handoff, input_type=SeatBookingInput),
     ],
     input_guardrails=[relevance_guardrail, jailbreak_guardrail],
     # NOTE: No structured input/output types - handles dynamic routing decisions
